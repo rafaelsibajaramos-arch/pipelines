@@ -1,0 +1,189 @@
+name: Reusable microservice CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+      test-runner:
+        type: string
+        default: jest
+      deploy-enabled:
+        type: boolean
+        default: false
+      failure-demo:
+        type: boolean
+        default: false
+      railway-project-id:
+        type: string
+        default: ""
+      railway-environment-id:
+        type: string
+        default: ""
+      railway-service-id:
+        type: string
+        default: ""
+    secrets:
+      RAILWAY_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      NODE_ENV: test
+      AUTH_PROVIDER: legacy
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/test_db
+      DIRECT_URL: postgresql://test:test@127.0.0.1:5432/test_db
+      JWT_PUBLIC_KEY: test-public-key-not-used-by-unit-tests
+      RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check source hygiene before using credentials
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const fs = require('node:fs');
+          const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+          for (const file of files) {
+            if (/(^|\/)\.env($|\.)/.test(file) && !file.endsWith('.env.example')) throw new Error('Tracked environment file: ' + file);
+            if (/\.(pem|key|bak)$/.test(file)) throw new Error('Forbidden credential/backup file: ' + file);
+            const content = fs.readFileSync(file, 'utf8');
+            if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(content)) throw new Error('Embedded private key: ' + file);
+            if (/gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[A-Z0-9]{16}/.test(content)) throw new Error('Possible access credential: ' + file);
+          }
+          NODE
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: Jest suites
+        if: inputs.test-runner == 'jest'
+        run: npm test -- --runInBand
+      - name: Node suites
+        if: inputs.test-runner == 'node'
+        run: npm test
+      - name: Controlled failing test for classroom evidence
+        if: inputs.failure-demo
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          assert.equal(2 + 2, 5, 'Intentional failing test: Docker and deploy must be skipped');
+          NODE
+
+  docker:
+    name: Docker image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - id: image
+        name: Immutable commit tag
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}:${COMMIT}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          tags: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Record image evidence
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf '### Container image\n\nImage: `%s`\n\nDigest: `%s`\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy Railway production
+    needs: [test, docker]
+    if: inputs.deploy-enabled && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    permissions:
+      contents: read
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ inputs.railway-project-id }}
+      RAILWAY_ENVIRONMENT_ID: ${{ inputs.railway-environment-id }}
+      RAILWAY_SERVICE_ID: ${{ inputs.railway-service-id }}
+      CI: "true"
+      NO_COLOR: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Validate deployment configuration without exposing secrets
+        run: |
+          test -n "$RAILWAY_TOKEN" || { echo "::error::Missing RAILWAY_TOKEN secret"; exit 1; }
+          test -n "$RAILWAY_PROJECT_ID" && test -n "$RAILWAY_ENVIRONMENT_ID" && test -n "$RAILWAY_SERVICE_ID"
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.71.0
+      - name: Deploy the same tested source commit
+        env:
+          RELEASE: ${{ github.repository }}@${{ github.sha }}
+        run: railway up --ci --project "$RAILWAY_PROJECT_ID" --service "$RAILWAY_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT_ID" --message "$RELEASE"
+      - name: Wait for healthy deployment, not only successful upload
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const args = ['deployment', 'list', '--project', process.env.RAILWAY_PROJECT_ID, '--service', process.env.RAILWAY_SERVICE_ID, '--environment', process.env.RAILWAY_ENVIRONMENT_ID, '--limit', '1', '--json'];
+          (async () => {
+            for (let i = 0; i < 60; i++) {
+              const deployment = JSON.parse(execFileSync('railway', args, { encoding: 'utf8' }))[0];
+              console.log('Deployment:', deployment.id, deployment.status);
+              if (deployment.status === 'SUCCESS') return;
+              if (['FAILED', 'CRASHED', 'REMOVED', 'SKIPPED'].includes(deployment.status)) throw new Error('Railway deployment did not become healthy');
+              await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+            throw new Error('Timed out waiting for Railway readiness');
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
+      - name: Record deployment evidence
+        env:
+          SERVICE: ${{ inputs.service-name }}
+          IMAGE: ${{ needs.docker.outputs.image }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          printf '### Production deployment\n\nService: %s\n\nTested commit: `%s`\n\nAuditable image: `%s`\n' "$SERVICE" "$COMMIT" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
