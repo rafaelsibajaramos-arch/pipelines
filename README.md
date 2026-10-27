@@ -30,7 +30,7 @@ En cada repositorio, Settings → Secrets and variables → Actions:
 - Variables `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_SERVICE_ID`, `DEPLOY_ENABLED`.
 - `GITHUB_TOKEN` publica imágenes del propio repositorio; no se necesita un PAT adicional.
 - Los secretos de PostgreSQL, JWT y correo permanecen en Railway; no se entregan a pruebas ni a Docker.
-- Railway: raíz `/`, `Dockerfile`, configuración `/railway.toml` y pre-deploy de migraciones existente.
+- Railway: raíz `/`, `Dockerfile`, pre-deploy de migraciones y ruta de salud propia de cada servicio. El script de conexión toma esa ruta de su `railway.toml` y la configura por API; no establece una ruta de archivo de configuración antigua en Railway.
 - Evitar el autodespliegue paralelo desde `fram`, pues eludiría el gate de Actions.
 
 `fram` se conserva como integración y respaldo. Las bases, volúmenes y variables de aplicación no se trasladan a GitHub. Staging es opcional en la actividad y no se crea, por decisión del propietario.
