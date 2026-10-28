@@ -1,0 +1,65 @@
+[
+  {
+    "service": "producer-service",
+    "id": 40607019309,
+    "url": "https://github.com/rafaelsibajaramos-arch/producer-service/actions/runs/40607019309",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:12Z"
+  },
+  {
+    "service": "catalog-service",
+    "id": 40607023328,
+    "url": "https://github.com/rafaelsibajaramos-arch/catalog-service/actions/runs/40607023328",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:15Z"
+  },
+  {
+    "service": "identity-service",
+    "id": 40607026999,
+    "url": "https://github.com/rafaelsibajaramos-arch/identity-service/actions/runs/40607026999",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:16Z"
+  },
+  {
+    "service": "inventory-service",
+    "id": 40607030717,
+    "url": "https://github.com/rafaelsibajaramos-arch/inventory-service/actions/runs/40607030717",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:18Z"
+  },
+  {
+    "service": "order-service",
+    "id": 40607034336,
+    "url": "https://github.com/rafaelsibajaramos-arch/order-service/actions/runs/40607034336",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:20Z"
+  },
+  {
+    "service": "payment-service",
+    "id": 40607037408,
+    "url": "https://github.com/rafaelsibajaramos-arch/payment-service/actions/runs/40607037408",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:22Z"
+  },
+  {
+    "service": "logistics-service",
+    "id": 40607040681,
+    "url": "https://github.com/rafaelsibajaramos-arch/logistics-service/actions/runs/40607040681",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:23Z"
+  },
+  {
+    "service": "notification-service",
+    "id": 40607044226,
+    "url": "https://github.com/rafaelsibajaramos-arch/notification-service/actions/runs/40607044226",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:25Z"
+  },
+  {
+    "service": "analytics-service",
+    "id": 40607047625,
+    "url": "https://github.com/rafaelsibajaramos-arch/analytics-service/actions/runs/40607047625",
+    "conclusion": "failure",
+    "created_at": "2026-10-28T00:10:27Z"
+  }
+]

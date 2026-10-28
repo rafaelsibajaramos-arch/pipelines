@@ -45,6 +45,7 @@ Se ejecutan las pruebas reales y una aserción intencionalmente incorrecta. Test
 
 - Repositorios: enlaces anteriores y este repositorio central.
 - `EVIDENCIAS.md` y `evidencias/`: resultados y capturas de ejecuciones reales, cuando estén verificadas.
+- `FALLO_Y_DEPLOY_POR_MICROSERVICIO.md`: enlaces al fallo controlado y al despliegue exitoso posterior de cada uno de los nueve servicios, con capturas individuales.
 - `INFORME_REFLEXION.md`: completar los integrantes antes de entregar.
 - Una ejecución verde solo demuestra despliegue si deploy terminó correctamente, no si fue omitido.
 
